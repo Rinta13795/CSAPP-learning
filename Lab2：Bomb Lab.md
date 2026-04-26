@@ -181,6 +181,10 @@ mov只允许进行赋值，不允许运算。
 
 寄存器里本质是数字 。`(寄存器)`，就是把这个数字当地址，从内存取值。而`寄存器`就是直接使用这个数字进行运算。
 
+mov -0x4(%rbx), %eax的意思是：
+
+%rbx - 4算寄存器地址————>取这个地址内存数值
+
 **3.
 |寄存器|本质作用|特点|
 |---|---|---|
@@ -499,3 +503,119 @@ struct example {
 
 
 **objdump -d bomb | tee asm.txt。">"重定向
+
+
+
+## Bomb实验
+
+问题：
+1
+为什么不cd就会bomb
+
+2关于寄存器偏移的知识
+
+**遇到的问题：
+2
+Mac 是 Apple Silicon（ARM 芯片），但 CSAPP 的镜像是 x86 架构的。Docker 用 Rosetta 模拟来跑这个 x86 容器，程序本身能跑，但 Rosetta 模拟对 ptrace 系统调用的支持不完整。GDB 的核心功能（读寄存器、设断点、单步执行）全靠 ptrace，所以就报了 "Couldn't get registers"。
+
+**解决：
+
+**执行命令：
+
+**终端A：**
+
+bash
+
+```bash
+qemu-x86_64 -g 1234 ./bomb
+```
+
+**终端B（GDB）：**
+
+```
+cd ~/csapp-labs/lab2.bomb
+gdb bomb
+target remote :1234
+break explode_bomb
+break phase_1
+1
+```
+
+**终端A（qemu）**— 就是程序本身。bomb 的输出（"Welcome to my fiendish little bomb"）在这里显示，你的答案也在这里输入。相当于正常跑 `./bomb` 时的那个窗口。
+
+**终端B（GDB）**— 调试器。你在这里设断点、看汇编、查寄存器、查内存。它通过端口 1234 远程连接到 qemu，控制程序的暂停和执行。
+
+
+
+**思路：
+1
+首先知道要解决什么问题？
+
+本质：
+bomb逻辑就是进行判断然后判断对就解决，错误就print（"bomb"）
+
+————就是先看反汇编代码，然后看explode_bomb位置。然后看test什么样的数值，再往上看这个数值模式（就知道要解决哪个数值了
+
+
+
+
+
+
+
+不用重头手动输。把已经过了的答案存进文件：
+
+```bash
+echo 'Border relations with Canada have never been better.' > answers.txt
+```
+
+以后每次重新调试，qemu 终端改成：
+
+```bash
+qemu-x86_64 -g 1234 ./bomb answers.txt
+```
+
+程序会自动读文件里的答案跳过已过的关卡，直接到下一关等你输入。
+
+每过一关，就把新答案追加进去：
+
+```bash
+echo '第二关的答案' >> answers.txt
+```
+
+注意是 `>>`（追加），不是 `>`（覆盖）。
+
+
+2
+cmp %eax, 8(%rbp)
+这个意思是计算rbp数值，+8去对应内存取数值
+
+3
+![](images/img_2604261323.png)
+
+**phase_2:
+
+  400f1c:	39 03                	cmp    %eax,(%rbx)
+  400f1e:	74 05                	je     400f25 <phase_2+0x29>
+  400f20:	e8 15 05 00 00       	callq  40143a <explode_bomb>
+
+这部分我计算出%rax的数值=2，这个就是系统的数值，（%rbx）=%rsp+4
+
+callq  40145c <read_six_numbers>
+
+👉 **把数据写到你传进去的内存地址里（也就是栈）**
+
+就是我输入的是
+rsp      → 第1个数
+rsp+4    → 第2个数
+rsp+8    → 第3个数
+...
+这些参数，要跟我需要推理的正确答案%rax对————>我要解决的就是求出%rax的数值
+
+
+answer:
+1
+Border relations with Canada have never been better.
+2
+1 2 4 8 16 32
+
+
